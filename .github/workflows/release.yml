@@ -1,0 +1,53 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      REHEARSAL_TEST_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Версия в package.json должна совпадать с тегом
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Упаковка
+        run: |
+          name="migration-rehearsal-${GITHUB_REF_NAME}"
+          mkdir -p "dist-pack/$name"
+          cp dist/migration-rehearsal.mjs README.md LICENSE "dist-pack/$name/"
+          cp -r examples "dist-pack/$name/"
+          tar -C dist-pack -czf "dist-pack/$name.tar.gz" "$name"
+          rm -rf "dist-pack/$name"
+          (cd dist-pack && sha256sum *.tar.gz > SHA256SUMS && cat SHA256SUMS)
+      - name: Подтверждение происхождения (provenance)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: dist-pack/*.tar.gz
+      - name: Публикация релиза
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" dist-pack/*.tar.gz dist-pack/SHA256SUMS
+          --title "migration-rehearsal $GITHUB_REF_NAME"
+          --notes "Один файл CLI (нужен Node.js 22+): node migration-rehearsal.mjs examples/shop/rehearsal.json --url postgres://... Внутри примеры. Проверьте SHA-256 из SHA256SUMS и аттестацию: gh attestation verify <файл> --repo Oleg4311/migration-rehearsal. Подробнее в README."

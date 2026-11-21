@@ -1,0 +1,60 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    name: тесты (PostgreSQL ${{ matrix.pg }})
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: [14, 16, 17]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      REHEARSAL_TEST_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Собранный файл работает отдельно от node_modules
+        run: |
+          mkdir /tmp/standalone && cp dist/migration-rehearsal.mjs /tmp/standalone/ && cp -r examples /tmp/standalone/
+          cd /tmp/standalone
+          # небезопасный набор должен не пройти проверку, безопасный — пройти
+          if node migration-rehearsal.mjs examples/shop/rehearsal.json --url "$REHEARSAL_TEST_URL" --sizes 5000 --fail-on warn --out unsafe.md; then echo "небезопасный набор прошёл проверку"; exit 1; fi
+          node migration-rehearsal.mjs examples/shop/rehearsal-safe.json --url "$REHEARSAL_TEST_URL" --sizes 5000 --fail-on danger --out safe.md
+          grep -q "Репетиция миграции" safe.md
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: matrix.pg == 17
+        with:
+          name: reports
+          path: /tmp/standalone/*.md
+
+  # Те же тесты на встроенном PostgreSQL (так их запускают локально)
+  embedded:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test

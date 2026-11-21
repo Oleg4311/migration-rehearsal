@@ -1,0 +1,24 @@
+{
+  "name": "migration-rehearsal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Репетиция миграции PostgreSQL: реальные блокировки, перезапись таблицы и задержки рабочей нагрузки на тестовых данных до выката",
+  "bin": { "migration-rehearsal": "dist/migration-rehearsal.mjs" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-concurrency=1 \"test/*.test.ts\"",
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "embedded-postgres": "18.3.0-beta.17",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0"
+  }
+}

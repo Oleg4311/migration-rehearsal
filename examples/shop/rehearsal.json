@@ -1,0 +1,13 @@
+{
+  "setup": "schema.sql",
+  "seed": "seed.sql",
+  "clients": 4,
+  "workload": [
+    { "name": "чтение заказа", "kind": "read", "sql": "SELECT * FROM orders WHERE id = {{id}}", "weight": 6 },
+    { "name": "заказы клиента", "kind": "read", "sql": "SELECT count(*) FROM orders WHERE id BETWEEN {{id}} AND {{id}} + 50", "weight": 1 },
+    { "name": "новый заказ", "kind": "write", "sql": "INSERT INTO orders (customer_id, total, note) VALUES (1 + ({{seq}} % 1000), 10, 'x')", "weight": 2 },
+    { "name": "смена статуса", "kind": "write", "sql": "UPDATE orders SET status = 'paid' WHERE id = {{id}}", "weight": 2 }
+  ],
+  "longReader": { "sql": "SELECT count(*) FROM orders", "holdMs": 1500 },
+  "migrations": ["migrations/unsafe/001_add_column.sql", "migrations/unsafe/002_volatile_default.sql", "migrations/unsafe/003_index.sql", "migrations/unsafe/004_alter_type.sql", "migrations/unsafe/005_foreign_key.sql", "migrations/unsafe/006_set_not_null.sql"]
+}
